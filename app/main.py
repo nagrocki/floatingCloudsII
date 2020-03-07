@@ -53,22 +53,6 @@ def one_move(square, direction):
         newSquare["y"] = square["y"]
     return newSquare
 
-def square_is_safe(square, dangerSquares, height, width):
-    '''
-    takes in a square and the danger squares and the height and width of the 
-    data["height"]xdata["width"] grid,
-    returns True if square is potentially a safe move for the next turn.
-    
-    *This function does not check for squares adjacent to enemy snake heads*
-    '''
-    safe = True
-    for dSquare in dangerSquares:
-        if dSquare["x"] == square["x"] and dSquare["y"] == square["y"]:
-            safe = False
-    if square["x"]<0 or square["x"]>=width or square["y"]<0 or square["y"]>=height:
-        safe = False
-    return safe
-
 def square_score(square, data):
     '''
     This functon scores a square based on how close it is to food, bigger snakes,
@@ -149,7 +133,6 @@ def move():
     data = bottle.request.json
 
     dangerSquares = danger_squares(data)
-        
     currentSquare = data['you']['body'][0]    ##my head
 
     safeMoves = []
