@@ -5,7 +5,27 @@ import bottle
 
 from api import ping_response, start_response, move_response, end_response
 
-
+def danger_squares(data):
+    '''
+    Takes in game data and returns dangerous squares (out of bounds, snake bodies)
+    '''
+    dangerSquares = []
+    for snek in data['board']['snakes']:    #other sneks not safe
+        for square in snek['body']:
+            dangerSquares.append(square)
+    for square in data['you']['body']:    ##head and body not safe 
+        dangerSquares.append(square)
+        
+    for width in range(data['board']["width"]):
+        dangerSquares.append({"width":width, "length":-1})
+        dangerSquares.append({"width":width, "length":data['board']["length"]})
+        
+    for length in range(data['board']["length"]):
+        dangerSquares.append({"width":-1, "length":length})
+        dangerSquares.append({"width":data['board']["width"], "length":length})
+    
+    return dangerSquares
+    
 def snek_dist(sq1,sq2):
     '''
     takes in two x,y tuples and returns taxicab distance
@@ -49,11 +69,21 @@ def square_is_safe(square, dangerSquares, height, width):
         safe = False
     return safe
 
-def square_score(square, scarySneks, yummySneks, foods):
+def square_score(square, data):
     '''
     This functon scores a square based on how close it is to food, bigger snakes,
     and smaller snakes. A higher score should correspond to a better move.
     '''
+    myLength = len(data['you']['body'])
+    foods = data['board']['food']
+    
+    scarySneks = []
+    yummySneks = []
+    for snek in data['board']['snakes']:
+        if len(snek['body'])>= myLength:
+            scarySneks.append(snek['body'])
+        else:
+            yummySneks.append(snek['body'])
     
     score = 0
     for snek in scarySneks:
@@ -118,32 +148,14 @@ def start():
 def move():
     data = bottle.request.json
 
-    dangerSquares = []
-    for snek in data['board']['snakes']:    #other sneks not safe
-        for square in snek['body']:
-            dangerSquares.append(square)
-    for square in data['you']['body']:    ##head and body not safe 
-        dangerSquares.append(square)
+    dangerSquares = danger_squares(data)
         
     currentSquare = data['you']['body'][0]    ##my head
-    foods = data['board']['food']
-    myLength = len(data['you']['body'])
-    
-    scarySneks = []
-    yummySneks = []
-    for snek in data['board']['snakes']:
-        if len(snek['body'])>= myLength:
-            scarySneks.append(snek['body'])
-        else:
-            yummySneks.append(snek['body'])
-    
-    
+
     safeMoves = []
     directions = ['up', 'down', 'left', 'right']
     for move in directions:
-        if square_is_safe(one_move(currentSquare, move), \
-                          dangerSquares, data['board']["height"], \
-                          data['board']["width"]):
+        if one_move(currentSquare, move) not in dangerSquares:
             safeMoves.append(move)
     
     if len(safeMoves) == 0:
@@ -153,8 +165,8 @@ def move():
     elif len(safeMoves) > 1:
         direction = safeMoves[0]
         for move in safeMoves:
-            if square_score(one_move(currentSquare, move), scarySneks, yummySneks, foods) > \
-            square_score(one_move(currentSquare, direction), scarySneks, yummySneks, foods):
+            if square_score(one_move(currentSquare, move), data) > \
+            square_score(one_move(currentSquare, direction), data):
                 direction = move
                
                 
