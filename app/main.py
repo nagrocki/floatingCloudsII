@@ -5,6 +5,76 @@ import bottle
 
 from api import ping_response, start_response, move_response, end_response
 
+directions = ["up", "down", "left", "right"]
+
+def safe_squares(square, dangerSquares):
+    """
+        returs the safe squares adjacent to square
+    """
+    safeSquares = []
+    for move in directions:
+        adjSquare = one_move(square, move)
+        if adjSquare not in dangerSquares:
+            safeSquares.append(adjSquare)
+    return safeSquares
+    
+def BFS_dist(source, sink, maxLen, data):
+    """
+       returns bfs search distance, no more than maxLen squares
+       returns infinity if all paths exhausted before finding
+
+
+       TODO: return error instead of infinity?
+    """
+##    directions = ["up", "down", "left", "right"]
+    if source == sink:
+        return 0
+    
+    dangerSquares = danger_squares(data)
+    height = data['board']["height"]
+    width = data['board']["width"]
+    
+    safeSquares = safe_squares(source, dangerSquares)
+             
+    paths = []
+    discoveredSquares = []
+    
+    ## check if adjacent to sink
+    for move in directions:
+        firstStep = one_move(source, move)
+        if firstStep == sink:
+            return 1
+    
+    ## start paths with safe squares
+    for square in safeSquares:
+        discoveredSquares.append(square)
+        startPath = [square]
+        paths.append(startPath)
+        
+    
+    for i in range(2, maxLen + 1):
+        longerPaths = []
+        for path in paths:
+            frontier = path[-1]    ## for each path, the frontier is the last visited square in the path
+            
+            for move in directions:
+                nextSquare = one_move(frontier, move)
+                if nextSquare is sink:
+                    return i
+                
+            safeSquares = safe_squares(frontier, dangerSquares)
+            for square in safeSquares:
+                ##nextSquare = one_move(frontier, move)
+                if square not in discoveredSquares:
+                    newPath = list(path) ## a copy of the path
+                    newPath.append(square)
+                    discoveredSquares.append(square)
+                    longerPaths.append(newPath)
+        paths = longerPaths               ## next time through the loop, we will build off new longer paths
+        if len(paths) == 0:
+            return float("inf")    ##if no paths from source to sink, distance = infinity
+    return i    ## returns maxLen if no path found before maxLen
+
 def danger_squares(data):
     '''
     Takes in game data and returns dangerous squares (out of bounds, snake bodies)
@@ -16,13 +86,16 @@ def danger_squares(data):
     for square in data['you']['body']:    ##head and body not safe 
         dangerSquares.append(square)
         
-    for width in range(data['board']["width"]):
-        dangerSquares.append({"width":width, "length":-1})
-        dangerSquares.append({"width":width, "length":data['board']["length"]})
+    height = data['board']["height"]
+    width = data['board']["width"]
+    
+    for i in range(width):
+        dangerSquares.append({"x":i, "y":-1})
+        dangerSquares.append({"x":i, "y":height})
         
-    for length in range(data['board']["length"]):
-        dangerSquares.append({"width":-1, "length":length})
-        dangerSquares.append({"width":data['board']["width"], "length":length})
+    for i in range(height):
+        dangerSquares.append({"x":-1, "y":i})
+        dangerSquares.append({"x":width, "y":i})
     
     return dangerSquares
     
@@ -70,23 +143,40 @@ def square_score(square, data):
             yummySneks.append(snek['body'])
     
     score = 0
+    maxBFSDist = 8
+    ## decrease near scary snek head, increase toward scary snake tail
     for snek in scarySneks:
-        if snek_dist(square, snek[0]) == 1:
-            score = score - 4
-        else:
-            score = score + 2/(snek_dist(square, snek[0]))**2
-    for snek in yummySneks:
-        if snek_dist(square, snek[0]) == 0:
-            score = score - 4 
-        elif snek_dist(square, snek[0]) == 1:
+        snekDist = BFS_dist(square, snek[0], maxBFSDist, data)
+        if snekDist == 1:
+            score = score - 4              # adjacent to head is bad
+        elif snekDist == 2 or snekDist == 3:
+            score = score - 4/snekDist # or kind of close to head is bad
+            
+        tailDist = BFS_dist(square, snek[-1], maxBFSDist, data)
+        if tailDist == 1:                  #follow a closish tail
             score = score + 3
+        elif tailDist == 2:
+            score = score + 1   
+            
+            
+    for snek in yummySneks:
+        snekDist = BFS_dist(square, snek[0], maxBFSDist, data)
+        if snekDist == 1:
+            score = score + 3 # eat yummy sneks
         else:
-            score = score + 2/(snek_dist(square, snek[0]))**2
+            score = score + 2/snekDist
+            
+    # when to eat? 
+    ## TO DO incorporate health
+    ##health = data["you"]["health"]
     for food in foods:
-        if snek_dist(square, food) == 0:
-            score = score + 5
-        else:
-            score = score + 4/snek_dist(square, food)
+        if snek_dist(square, food) < (1/2)*data['board']["width"]:
+            foodDist = BFS_dist(square, food, maxBFSDist, data)
+            if foodDist == 0:
+                score = score + 5
+            else:
+                score = score + 4/snek_dist(square, food)
+
     return score
 
 @bottle.route('/')
