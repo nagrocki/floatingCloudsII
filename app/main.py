@@ -18,7 +18,51 @@ def safe_squares(square, dangerSquares):
             safeSquares.append(adjSquare)
     return safeSquares
     
-def BFS_dist(source, sink, maxLen, data):
+def BFS_list(source, maxLen, data):
+    """
+        returns (maxLen) lists inside distlist
+        the distlist[i] contains squares distance i from the source.
+        
+    """
+    dangerSquares = danger_squares(data)
+    height = data['board']["height"]
+    width = data['board']["width"]
+    safeSquares = safe_squares(source, dangerSquares)
+    
+    #initialize distlist[0] as the source
+    distzero  = [source]
+    distlist = []
+    distlist.append(distzero)
+    discoveredSquares = [source]
+
+    for i in range(1, maxLen + 1):
+        disti = []
+        for square in distlist[-1]:
+            safeSquares = safe_squares(square, dangerSquares)
+            for step in safeSquares:
+                if step not in discoveredSquares:
+                    discoveredSquares.append(step)
+                    disti.append(step)
+        distlist.append(disti)
+        
+        
+    return distlist
+    
+def BFS_dist(sink, distList):
+    """
+        returns the distance to sink given distList. Assumes source is distList[0]
+        returns 1 more than length of distlist if sink not found in distlist
+    """
+    for i in range(len(distList)):
+        if sink in distList[i]:
+            return i
+    
+    ###else
+    return len(distList) + 1
+    
+    
+    
+def BFS_dist2(source, sink, maxLen, data):
     """
        returns bfs search distance, no more than maxLen squares
        returns infinity if all paths exhausted before finding
@@ -26,7 +70,7 @@ def BFS_dist(source, sink, maxLen, data):
 
        TODO: return error instead of infinity?
     """
-##    directions = ["up", "down", "left", "right"]
+
     if source == sink:
         return 0
     
@@ -131,6 +175,9 @@ def square_score(square, data):
     This functon scores a square based on how close it is to food, bigger snakes,
     and smaller snakes. A higher score should correspond to a better move.
     '''
+    maxLen = 22
+    distList = BFS_list(square, maxLen, data)
+    
     myLength = len(data['you']['body'])
     foods = data['board']['food']
     
@@ -143,24 +190,27 @@ def square_score(square, data):
             yummySneks.append(snek['body'])
     
     score = 0
-    maxBFSDist = 8
+
     ## decrease near scary snek head, increase toward scary snake tail
     for snek in scarySneks:
-        snekDist = BFS_dist(square, snek[0], maxBFSDist, data)
-        if snekDist == 1:
-            score = score - 4              # adjacent to head is bad
-        elif snekDist == 2 or snekDist == 3:
+        snekDist = BFS_dist(snek[0], distList)
+        #snekDist = BFS_dist(square, snek[0], maxBFSDist, data)
+        if snekDist == 0:
+            score = score - 6              # adjacent to head is bad
+        else:
             score = score - 4/snekDist # or kind of close to head is bad
-            
-        tailDist = BFS_dist(square, snek[-1], maxBFSDist, data)
+        
+        tailDist = BFS_dist(snek[-1], distList)
+        #tailDist = BFS_dist(square, snek[-1], maxBFSDist, data)
         if tailDist == 1:                  #follow a closish tail
             score = score + 3
         elif tailDist == 2:
-            score = score + 1   
+            score = score + 2/tailDist  
             
             
     for snek in yummySneks:
-        snekDist = BFS_dist(square, snek[0], maxBFSDist, data)
+        snekDist = BFS_dist(snek[0], distList)
+        #snekDist = BFS_dist(square, snek[0], maxBFSDist, data)
         if snekDist == 1:
             score = score + 3 # eat yummy sneks
         else:
@@ -168,14 +218,15 @@ def square_score(square, data):
             
     # when to eat? 
     ## TO DO incorporate health
-    ##health = data["you"]["health"]
+    health = data['you']['health']
     for food in foods:
-        if snek_dist(square, food) < (1/2)*data['board']["width"]:
-            foodDist = BFS_dist(square, food, maxBFSDist, data)
-            if foodDist == 0:
-                score = score + 5
-            else:
-                score = score + 4/snek_dist(square, food)
+        ##if snek_dist(square, food) < (1/2)*data['board']["width"]:
+        foodDist = BFS_dist(food, distList)
+        #foodDist = BFS_dist(square, food, maxBFSDist, data)
+        if foodDist == 0:
+            score = score + 5
+        else:
+            score = score + (1/(foodDist+1))*25/(health+4)
 
     return score
 
@@ -230,6 +281,9 @@ def move():
     for move in directions:
         if one_move(currentSquare, move) not in dangerSquares:
             safeMoves.append(move)
+    
+        
+
     
     if len(safeMoves) == 0:
         direction = random.choice(directions)    # when there are no safe moves, chaos ensues
